@@ -11,9 +11,14 @@ defmodule Project2.Mixfile do
     ]
   end
 
+  def escript() do
+    [main_module: App]
+  end
+
   # Run "mix help compile.app" to learn about applications.
   def application do
-    [
+    [ applications: [],
+      mod: { Project1, [] },
       extra_applications: [:logger]
     ]
   end

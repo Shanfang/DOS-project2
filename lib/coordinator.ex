@@ -6,7 +6,7 @@ defmodule Coordinator do
         GenServer.start_link(__MODULE__, [], [name: {:global, __MODULE__}])
     end
 
-    def initialize_actor_system do 
+    def initialize_actor_system([num_of_nodes, topology, algorithm]) do 
         GenServer.call({:global, __MODULE__}, {:initialize_actor_system, [num_of_nodes, topology, algorithm]})
     end  
     def converged(:converged) do
@@ -46,14 +46,14 @@ defmodule Coordinator do
         actors = %{}
         list = []
         for index <- 0..num_of_nodes - 1 do
-            actor = Actor.start_link(index) 
+            actor = spawn(Actor, :start_link, index)            
             actors = Map.put(Integer.to_string(index), actor)
             list = [index | list]
         end 
 
         initial_actor_id = Enum.random(list)
         # fetch the name of the initial actor from mapping
-        initial_actor_name = Map.fetch(actors, Integer(initial_actor_id)
+        initial_actor = Map.fetch(actors, Integer(initial_actor_id) |> # get the pid of this actor
 
 
         # start timing when initialization is complete
@@ -61,6 +61,7 @@ defmodule Coordinator do
         case algorithm do
             "gossip" ->
                 # start gossip()
+                
             "push_sum" ->
                 # start push_sum()
         end
