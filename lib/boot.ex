@@ -1,9 +1,7 @@
 defmodule App do
     def main(args) do
         #input = Application.get_env(:project2, :num_of_nodes, 1000, :topology, full_network, :algorithm, gossip)    
-        
-        ############### add check invalid input if possible ###################
-        args |> loop(100) # 100 is set to non-negative number, so that the first loop() is executed
+        args |> loop(1) # 1 is set to non-negative number, so that the first loop() is executed
     end
 
     defp loop(args, n) when n > 0 do
@@ -16,16 +14,9 @@ defmodule App do
             square_root = :math.sqrt(num_of_nodes) |> Float.ceil |> :math.pow(2) |> trunc
         end
 
-        # spawns coordinator
-        coordinator = spawn(Coordinator, :initialize_actor_system, [num_of_nodes, topology, algorithm])
-        
-        # spawns coordinator and workers
-        num_of_zeros = args        
-        banker = spawn(Banker, :loop, [[],[]])
-        for n <- 1..num_of_workers do
-            spawn(Worker, :mine, [num_of_zeros, banker])
-            #send worker_pid, {:self, coordinator_pid}
-        end
+        Coordinator.start_link
+        Coordinator.initialize_actor_system(coordinator, [num_of_nodes, topology, algorithm])
+        #coordinator = spawn(Coordinator, :initialize_actor_system, [num_of_nodes, topology, algorithm])
         loop(args, n - 1)
     end
 
