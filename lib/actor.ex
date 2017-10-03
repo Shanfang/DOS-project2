@@ -3,74 +3,80 @@ defmodule Actor do
     @name ACTOR
 
     ######################### client API ####################
-    def start_link(counter, s_value, w_value) do
-        GenServer.start_link(__MODULE__, [counter, s_value, w_value], opts ++ [name: ACTOR)
+    def start_link(index) do
+        GenServer.start_link(__MODULE__, index, opts ++ [name: ACTOR])
     end
 
-    def start_work([num_of_nodes, topology, algorithm, id]) do
-        GenServer.call(@name, {:start_work, [num_of_nodes, topology, algorithm, id]})
+    # def start_work([num_of_nodes, topology, algorithm, id]) do
+    #    GenServer.call(@name, {:start_work, [num_of_nodes, topology, algorithm, id]})
+    # end
+    def start_gossip([num_of_nodes, topology, id]) do
+       GenServer.call(@name, {:start_gossip, [num_of_nodes, topology, algorithm, id]})     
     end
 
-    def get_rumor(:rumor) do
-        GenServer.call(@name, :get_rumor)
+    def start_push_sum([num_of_nodes, topology, id]) do
+        GenServer.call(@name, {:start_push_sum, [num_of_nodes, topology, algorithm, id]})             
+    end
+    
+    def gossip_rumor do
+        GenServer.call(@name, :gossip_rumor)
     end
     def push_sum_rumor([delta_s, delta_w]) do
         GenServer.call(@name, {:push_sum_rumor, [delta_s, delta_w]})
     end
     ######################### callbacks ####################
 
-    def init([counter, s_value, w_value]) do
-        {:ok, [counter : 0, s_value: 0, w_value: 1]}
+    def init(index) do
+        {:ok, [id: index, counter: 0, s_value: 0, w_value: 1]]}
+        #{:ok, [counter : 0, s_value: 0, w_value: 1]}
     end
 
     # send rumor to its neighbors, choose neighbor according to topo config
-    def handle_call({:start_work, [num_of_nodes, topology, algorithm, id]}, _from, state) do
-        case algorithm do
-            "gossip" -> 
-                case topology do
-                    "full" ->
-                        neighbor_id = neighbor_full(id, num_of_nodes)
-                        propagate_gossip(neighbors, neighbor_id)
-                    "2D" ->
-                        neighbor_id = neighbor_2D(id, num_of_nodes)
-                        propagate_gossip(neighbors, neighbor_id)                        
-                    "line" ->
-                        neighbor_id = neighbor_line(id, num_of_nodes)
-                        propagate_gossip(neighbors, neighbor_id)                        
-                    "imp2D" ->
-                        neighbor_id = neighbor_imp2D(id, num_of_nodes)
-                        propagate_gossip(neighbors, neighbor_id)        
-                    _ ->
-                        IO.puts "Invalid topology, please try again!"
-                end
-                new_state = [counter: 1, s_value: 0, w_value: 1]
-            "push_sum" ->
-                case topology do
-                    "full" ->
-                        neighbor_id = neighbor_full(id, num_of_nodes)
-                        propagate_push_sum(neighbors, neighbor_id)
-                    "2D" ->
-                        neighbor_id = neighbor_2D(id, num_of_nodes)
-                        propagate_push_sum(neighbors, neighbor_id)                        
-                    "line" ->
-                        neighbor_id = neighbor_line(id, num_of_nodes)
-                        propagate_push_sum(neighbors, neighbor_id)                        
-                    "imp2D" ->
-                        neighbor_id = neighbor_imp2D(id, num_of_nodes)
-                        propagate_push_sum(neighbors, neighbor_id) 
-                    _ ->
-                        IO.puts "Invalid topology, please try again!"
-                end
-                new_state = [counter: 1, s_value: id, w_value: 1]
+    def handle_call({:start_gossip, [num_of_nodes, topology, id]}, _from, state) do
+        case topology do
+            "full" ->
+                neighbor_id = neighbor_full(id, num_of_nodes)
+                propagate_gossip(neighbors, neighbor_id)
+            "2D" ->
+                neighbor_id = neighbor_2D(id, num_of_nodes)
+                propagate_gossip(neighbors, neighbor_id)                        
+            "line" ->
+                neighbor_id = neighbor_line(id, num_of_nodes)
+                propagate_gossip(neighbors, neighbor_id)                        
+            "imp2D" ->
+                neighbor_id = neighbor_imp2D(id, num_of_nodes)
+                propagate_gossip(neighbors, neighbor_id)        
             _ ->
-                IO.puts "Invalid algorithm, please try again!"
-                #{:error}
+                IO.puts "Invalid topology, please try again!"
         end
+        new_state = [counter: 1, s_value: 0, w_value: 1]
         {:ok, new_state}
     end
 
+    def handle_call({:start_push_sum, [num_of_nodes, topology, id]}, _from, state) do
+        case topology do
+            "full" ->
+                neighbor_id = neighbor_full(id, num_of_nodes)
+                propagate_push_sum(neighbors, neighbor_id)
+            "2D" ->
+                neighbor_id = neighbor_2D(id, num_of_nodes)
+                propagate_push_sum(neighbors, neighbor_id)                        
+            "line" ->
+                neighbor_id = neighbor_line(id, num_of_nodes)
+                propagate_push_sum(neighbors, neighbor_id)                        
+            "imp2D" ->
+                neighbor_id = neighbor_imp2D(id, num_of_nodes)
+                propagate_push_sum(neighbors, neighbor_id) 
+            _ ->
+                IO.puts "Invalid topology, please try again!"
+        end
+        new_state = [counter: 1, s_value: id, w_value: 1]
+        {:ok, new_state}        
+    end
+
+    
     # process rumor for the push_sum algorithm
-    def handle_cast({:get_rumor,[delta_s, delta_w]}, state) do
+    def handle_cast({:push_sum_rumor,[delta_s, delta_w]}, state) do
 
     ########## s_value, w_value, previous_ration, unchange_times are all in the state ###########
         previous_ration = s_value / w_value
@@ -86,7 +92,7 @@ defmodule Actor do
     end 
 
     # process rumor for the gossip algorithm, and if a actor gets 10 messages, it will be killed
-    def handle_cast({:get_rumor}, state) do
+    def handle_cast({:gossip_rumor}, state) do
         new_counter = counter + 1
         if new_counter == 10 do
             Coordinator.converged(:converged)
