@@ -10,8 +10,8 @@ defmodule Coordinator do
         GenServer.start_link(__MODULE__, [], [name: :coordinator])
     end
 
-    def initialize_actor_system(coordinator, [num_of_nodes, topology, algorithm]) do 
-        GenServer.call(coordinator, {:initialize_actor_system, [num_of_nodes, topology, algorithm]})
+    def initialize_actor_system(coordinator, num_of_nodes, topology, algorithm) do 
+        GenServer.call(coordinator, {:initialize_actor_system, num_of_nodes, topology, algorithm})
     end  
     def converged(coordinator, :converged) do
         GenServer.cast(coordinator, :converged)
@@ -19,18 +19,15 @@ defmodule Coordinator do
 
     ######################### callbacks ####################
     def init([]) do
-        conv_count = 0
-        total_nodes = 0
-        start_time = 0
-        end_time = 0
-        state =  %State{conv_count: conv_count, total_nodes: total_nodes, start_time: start_time, end_time: end_time}
+        state = %State{}
         {:ok, state}
     end
 
-    def handle_call({:initialize_actor_system, [num_of_nodes, topology, algorithm]}, _from, state) do
-        total_nodes = num_of_nodes
+    #def handle_call({:initialize_actor_system, [num_of_nodes: num_of_nodes, topology: topology, algorithm: algorithm]}, _from, state) do        
+    def handle_call({:initialize_actor_system, num_of_nodes, topology, algorithm}, _from, state) do
         start_time = init_actors(num_of_nodes, topology, algorithm)
-        {:ok, %{state | total_nodes: total_nodes, start_time: start_time}}
+        IO.puts "actors have been initialized"
+        {:ok, %{state | total_nodes: num_of_nodes, start_time: start_time}}
     end
 
     def handle_cast(:converged, state) do
@@ -51,20 +48,21 @@ defmodule Coordinator do
     defp init_actors(num_of_nodes, topology, algorithm) do       
         # building actors system
         list = []
+        # num_of_nodes = String.to_integer(num_of_nodes)
         for index <- 0..num_of_nodes - 1 do
             Actor.start_link(index)            
             list = [index | list]
         end 
 
-        initial_actor = Enum.random(list)
+        initial_actor = Enum.random(list) |> Integer.to_string |> String.to_atom
 
         # start timing when initialization is complete
         start_time = :os.system_time(:millisecond)
         case algorithm do
             "gossip" ->
-                Actor.start_gossip(initial_actor, [num_of_nodes, topology])                
+                Actor.start_gossip(initial_actor, num_of_nodes, topology])                
             "push_sum" ->
-                Actor.start_push_sum(Integer.to_string(initial_actor), [num_of_nodes, topology, initial_actor, 0, 0])                
+                Actor.start_push_sum(initial_actor, num_of_nodes, topology, 0, 0.5)                
             _ -> 
                 IO.puts "Invalid algorithm, please try again!"                   
         end

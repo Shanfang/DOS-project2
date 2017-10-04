@@ -9,16 +9,16 @@ defmodule Actor do
     end
 
     def start_link(index) do
-        actor_name = Integer.to_string(index)
+        actor_name = index |> Integer.to_string |> String.to_atom
         GenServer.start_link(__MODULE__, index, [name: actor_name])
     end
 
-    def start_gossip(actor_name, [num_of_nodes, topology]) do
-       GenServer.call(actor_name, {:start_gossip, [num_of_nodes, topology]})     
+    def start_gossip(actor_name, num_of_nodes, topology) do
+       GenServer.cast(actor_name, {:start_gossip, num_of_nodes, topology})     
     end
 
-    def start_push_sum(actor_name, [num_of_nodes, topology, delta_s, delta_w]) do
-        GenServer.call(actor_name, {:start_push_sum, [num_of_nodes, topology, delta_s, delta_w]})             
+    def start_push_sum(actor_name, num_of_nodes, topology, delta_s, delta_w) do
+        GenServer.cast(actor_name, {:start_push_sum, num_of_nodes, topology, delta_s, delta_w})             
     end
     
     ######################### callbacks ####################
@@ -37,8 +37,8 @@ defmodule Actor do
       end
 
     # send rumor to its neighbors, choose neighbor according to topology matching
-    # def handle_call({:start_gossip, [num_of_nodes, topology, id]}, _from, [id: index, counter: 0, s_value: 0, w_value: 1, unchange_times: 0]) do        
-    def handle_call({:start_gossip, [num_of_nodes, topology]}, _from, state) do
+    def handle_cast({:start_gossip, num_of_nodes, topology}, state) do
+        IO.puts "start gossip, counter increase by one"
         new_counter = state[:counter] + 1
         if new_counter == 10 do
             Coordinator.converged(:coordinator, :converged)
@@ -61,17 +61,20 @@ defmodule Actor do
             _ ->
                 IO.puts "Invalid topology, please try again!"
         end
-        {:ok, %{state | counter: new_counter}}
+
+        # resend rumor to it neighbors after 1 second
+        gossip_resend(num_of_nodes, topology)
+        {:noreply, %{state | counter: new_counter}}
     end
 
     # when receiving push_sum msg
-    def handle_call({:start_push_sum, [num_of_nodes, topology, delta_s, delta_w]}, _from, state) do
+    def handle_cast({:start_push_sum, num_of_nodes, topology, delta_s, delta_w}, state) do
         previous_ration = state[:s_value] / state[:w_value]
         new_s = state[:s_value] + delta_s
         new_w = state[:w_value] + delta_w
         current_ration = new_s / new_w
         new_counter = state[:counter] + 1
-        unchange_times = check_unchange(current_ration, previous_ration, :unchange_times)
+        unchange_times = check_unchange(current_ration, previous_ration, state[:unchange_times])
         if unchange_times == 3 do
             Coordinator.converged(:coordinator, :converged)
             Process.exit(self(), :kill)                    
@@ -80,7 +83,6 @@ defmodule Actor do
         case topology do
             "full" ->
                 neighbors = Topology.neighbor_full(state[:id], num_of_nodes)
-                # propagate_push_sum(neighbors, state)
                 propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
             "2D" ->
                 neighbors = Topology.neighbor_2D(state[:id], num_of_nodes)
@@ -96,9 +98,18 @@ defmodule Actor do
         end
         s_value = new_s / 2
         w_value = new_w / 2
-        {:ok, %{state | counter: new_counter, s_value: s_value, w_value: w_value, unchange_times: unchange_times}}
+        {:noreply, %{state | counter: new_counter, s_value: s_value, w_value: w_value, unchange_times: unchange_times}}
     end
 
+    def handle_info({:gossip_resend, num_of_nodes, topology}, state) do
+        Actor.start_gossip(self(), num_of_nodes, topology)
+        {:noreply, state}
+    end
+
+    def handle_info({:push_sum_resend, num_of_nodes, topology}, state) do
+        Actor.start_push_sum(serlf(), num_of_nodes, topology, state[:s_value] / 2, state[:w_value] / 2)
+        {:noreply, %{state | s_value: state[:s_value] / 2, w_value: state[:w_value] / 2}}
+    end
     ######################### helper functions ####################
 
 
@@ -106,7 +117,7 @@ defmodule Actor do
     defp propagate_gossip(neighbors, num_of_nodes, topology) do
         Enum.each(neighbors, fn(neighbor) -> 
             # Actor.gossip_rumor(Integer.to_string(neighbor))
-            Actor.start_gossip(Integer.to_string(neighbor), [num_of_nodes, topology])                            
+            Actor.start_gossip(neighbor |> Integer.to_string |> String.to_atom, num_of_nodes, topology)                            
         end)        
         #if alive?(neighbor_pid) do
         #    Enum.each(neighbors, fn neighbor -> Actor.gossip_rumor(Integer.to_string(neighbor)) end)        
@@ -116,7 +127,7 @@ defmodule Actor do
     defp propagate_push_sum(neighbors, num_of_nodes, topology, delta_s, delta_w) do
         Enum.each(neighbors, fn(neighbor) -> 
             # Actor.gossip_rumor(Integer.to_string(neighbor), [s_value / 2, w_value / 2])
-            Actor.start_push_sum(Integer.to_string(neighbor), [num_of_nodes, topology, delta_s, delta_w])                            
+            Actor.start_push_sum(neighbor |> Integer.to_string |> String.to_atom, num_of_nodes, topology, delta_s, delta_w])                            
         end)                
     end
 
@@ -124,11 +135,20 @@ defmodule Actor do
         unchange = 
             case abs(current_ration - previous_ration) < :math.pow(10, -10) do
                 true ->
-                    unchange = unchange_times + 1
+                    unchange_times + 1
                 _ ->
-                    unchange = 0
+                    0
             end
         unchange
+    end
+
+    # resend rumor to neighbors
+    defp gossip_resend(num_of_nodes, topology) do
+        Process.send_after(self(), {:gossip_resend, num_of_nodes, topology}, 1000) # resend after 1 second
+    end
+
+    defp push_sum_resend(num_of_nodes, topology) do
+        Process.send_after(self(), {:push_sum_resend, num_of_nodes, topology}, 1000) # resend after 1 second
     end
 
 end
