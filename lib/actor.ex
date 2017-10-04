@@ -36,10 +36,6 @@ defmodule Actor do
         {:ok, state}
       end
 
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#$$$$$$$$$$$ check out the following site for reschedule work, so the rumor is resend after a certain period
-      https://hexdocs.pm/elixir/GenServer.html#content
-
     # send rumor to its neighbors, choose neighbor according to topology matching
     def handle_cast({:start_gossip, num_of_nodes, topology}, state) do
         IO.puts "start gossip, counter increase by one"
@@ -65,6 +61,9 @@ defmodule Actor do
             _ ->
                 IO.puts "Invalid topology, please try again!"
         end
+
+        # resend rumor to it neighbors after 1 second
+        gossip_resend(num_of_nodes, topology)
         {:noreply, %{state | counter: new_counter}}
     end
 
@@ -102,6 +101,15 @@ defmodule Actor do
         {:noreply, %{state | counter: new_counter, s_value: s_value, w_value: w_value, unchange_times: unchange_times}}
     end
 
+    def handle_info({:gossip_resend, num_of_nodes, topology}, state) do
+        Actor.start_gossip(self(), num_of_nodes, topology)
+        {:noreply, state}
+    end
+
+    def handle_info({:push_sum_resend, num_of_nodes, topology}, state) do
+        Actor.start_push_sum(serlf(), num_of_nodes, topology, state[:s_value] / 2, state[:w_value] / 2)
+        {:noreply, %{state | s_value: state[:s_value] / 2, w_value: state[:w_value] / 2}}
+    end
     ######################### helper functions ####################
 
 
@@ -132,6 +140,15 @@ defmodule Actor do
                     0
             end
         unchange
+    end
+
+    # resend rumor to neighbors
+    defp gossip_resend(num_of_nodes, topology) do
+        Process.send_after(self(), {:gossip_resend, num_of_nodes, topology}, 1000) # resend after 1 second
+    end
+
+    defp push_sum_resend(num_of_nodes, topology) do
+        Process.send_after(self(), {:push_sum_resend, num_of_nodes, topology}, 1000) # resend after 1 second
     end
 
 end
