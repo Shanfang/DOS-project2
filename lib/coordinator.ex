@@ -2,34 +2,38 @@ defmodule Coordinator do
     use GenServer
 
     ######################### client API ####################
-    defmodule State do
-        defstruct conv_count: 0, total_nodes: 0, start_time: 0, end_time: 0
-    end
 
     def start_link do
-        GenServer.start_link(__MODULE__, [], [name: :coordinator])
+        GenServer.start_link(__MODULE__, %{}, [name: :coordinator])
     end
 
     def initialize_actor_system(coordinator, num_of_nodes, topology, algorithm) do 
-        GenServer.call(coordinator, {:initialize_actor_system, num_of_nodes, topology, algorithm})
+        GenServer.cast(coordinator, {:initialize_actor_system, num_of_nodes, topology, algorithm})
     end  
     def converged(coordinator, :converged) do
         GenServer.cast(coordinator, :converged)
     end
 
+    def say_hello(coordinator, :hello) do
+        GenServer.cast(coordinator, :hello)
+    end
     ######################### callbacks ####################
-    def init([]) do
-        state = %State{}
+    def init(%{}) do
+        state = %{conv_count: 0, total_nodes: 0, start_time: 0, end_time: 0}
         {:ok, state}
     end
 
     #def handle_call({:initialize_actor_system, [num_of_nodes: num_of_nodes, topology: topology, algorithm: algorithm]}, _from, state) do        
-    def handle_call({:initialize_actor_system, num_of_nodes, topology, algorithm}, _from, state) do
+    def handle_cast({:initialize_actor_system, num_of_nodes, topology, algorithm}, state) do
         start_time = init_actors(num_of_nodes, topology, algorithm)
         IO.puts "actors have been initialized"
-        {:ok, %{state | total_nodes: num_of_nodes, start_time: start_time}}
+        {:noreply, %{state | total_nodes: num_of_nodes, start_time: start_time}}
     end
 
+    def handle_info(:hello, state) do
+        IO.put "hello Shanfang"
+        {:noreply, state}
+    end
     def handle_cast(:converged, state) do
         conv_count = state[:conv_count] + 1
         total_num = state[:total_nodes]
@@ -47,20 +51,19 @@ defmodule Coordinator do
 
     defp init_actors(num_of_nodes, topology, algorithm) do       
         # building actors system
-        list = []
+
         # num_of_nodes = String.to_integer(num_of_nodes)
         for index <- 0..num_of_nodes - 1 do
             Actor.start_link(index)            
-            list = [index | list]
         end 
-
-        initial_actor = Enum.random(list) |> Integer.to_string |> String.to_atom
+         
+        initial_actor = :rand.uniform(num_of_nodes - 1) |> Integer.to_string |> String.to_atom
 
         # start timing when initialization is complete
         start_time = :os.system_time(:millisecond)
         case algorithm do
             "gossip" ->
-                Actor.start_gossip(initial_actor, num_of_nodes, topology])                
+                Actor.start_gossip(initial_actor, num_of_nodes, topology)                
             "push_sum" ->
                 Actor.start_push_sum(initial_actor, num_of_nodes, topology, 0, 0.5)                
             _ -> 

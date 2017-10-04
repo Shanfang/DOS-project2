@@ -4,9 +4,6 @@ defmodule Actor do
     use GenServer
 
     ######################### client API ####################
-    defmodule State do
-        defstruct id: 0, counter: 0, s_value: 0, w_value: 1, unchange_times: 0
-    end
 
     def start_link(index) do
         actor_name = index |> Integer.to_string |> String.to_atom
@@ -23,18 +20,11 @@ defmodule Actor do
     
     ######################### callbacks ####################
 
-    def init(index) do
-        id = index
-        counter = 0
-        s_value = 0 
-        w_value = 1
-        unchange_times = 0
-        init([], %State{id: id, counter: counter, s_value: s_value, w_value: w_value, unchange_times: unchange_times})
-      end
-    
-      def init([], state) do
+    def init(index) do        
+        state = %{id: 0, counter: 0, s_value: 0, w_value: 1, unchange_times: 0}
+        %{state| id: index}
         {:ok, state}
-      end
+    end
 
     # send rumor to its neighbors, choose neighbor according to topology matching
     def handle_cast({:start_gossip, num_of_nodes, topology}, state) do
@@ -107,7 +97,7 @@ defmodule Actor do
     end
 
     def handle_info({:push_sum_resend, num_of_nodes, topology}, state) do
-        Actor.start_push_sum(serlf(), num_of_nodes, topology, state[:s_value] / 2, state[:w_value] / 2)
+        Actor.start_push_sum(self(), num_of_nodes, topology, state[:s_value] / 2, state[:w_value] / 2)
         {:noreply, %{state | s_value: state[:s_value] / 2, w_value: state[:w_value] / 2}}
     end
     ######################### helper functions ####################
@@ -127,7 +117,7 @@ defmodule Actor do
     defp propagate_push_sum(neighbors, num_of_nodes, topology, delta_s, delta_w) do
         Enum.each(neighbors, fn(neighbor) -> 
             # Actor.gossip_rumor(Integer.to_string(neighbor), [s_value / 2, w_value / 2])
-            Actor.start_push_sum(neighbor |> Integer.to_string |> String.to_atom, num_of_nodes, topology, delta_s, delta_w])                            
+            Actor.start_push_sum(neighbor |> Integer.to_string |> String.to_atom, num_of_nodes, topology, delta_s, delta_w)                            
         end)                
     end
 
