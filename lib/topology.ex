@@ -1,19 +1,16 @@
 defmodule Topology do
-
+    import Math
     # find neighbors for full topology
-    defp neighbor_full(id, num_of_nodes) do
-        neighbors = []
-        for i <- 1..num_of_nodes do
-            neighbors = [i | neighbors]
-        end
-        Enum.filter(neighbors, fn(x) -> x != id end)
+    def neighbor_full(id, num_of_nodes) do
+        neighbors = Enum.map(0..num_of_nodes - 1, fn(x) -> x end)
+        # Enum.filter(neighbors, fn(x) -> id !== x end)
         neighbors
     end
 
     # find neighbors for 2D topology
-    defp neighbor_2D(id, num_of_nodes) do
+    def neighbor_2D(id, num_of_nodes) do
         neighbors = []
-        square_len = :math.sqrt(num_of_nodes)
+        square_len = Math.sqrt(num_of_nodes) |> round       
         row_index = div(id, square_len)
         col_index = rem(id, square_len)
         if row_index - 1 >= 0 do
@@ -39,22 +36,22 @@ defmodule Topology do
     end
 
     # find neighbors for line topology
-    defp neighbor_line(id, num_of_nodes) do
+    def neighbor_line(id, num_of_nodes) do
         neighbors = []
-        case id do
-            num_of_nodes - 1 ->
+        cond do
+            id + 1 == num_of_nodes ->
                 neighbors = [id - 1 | neighbors]
-            0 ->
+            id == 0 ->
                 neighbors = [id + 1 | neighbors]
-            _ ->
+            true ->
                 neighbors = [id + 1 | neighbors]
-                neighbors = [id - 1 | neighbors]
+                neighbors = [id - 1 | neighbors]         
         end
         neighbors
     end
 
     # find neighbors for imperfect 2D topology
-    defp neighbor_imp2D(id, num_of_nodes) do
+    def neighbor_imp2D(id, num_of_nodes) do
         neighbors = neighbor_2D(id, num_of_nodes)
         random_neighbor = :rand.uniform(num_of_nodes) - 1
         neighbors = [random_neighbor | neighbors]

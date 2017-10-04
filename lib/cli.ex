@@ -11,11 +11,11 @@ defmodule App do
 
         # for 2D based topology, round up num_of_nodes to a perfect square
         if String.equivalent?(topology, "2D") || String.equivalent?(topology, "imperfect2D") do
-            square_root = :math.sqrt(num_of_nodes) |> Float.ceil |> :math.pow(2) |> trunc
+            num_of_nodes = :math.sqrt(num_of_nodes) |> Float.ceil |> :math.pow(2)
         end
 
         Coordinator.start_link
-        Coordinator.initialize_actor_system(coordinator, [num_of_nodes, topology, algorithm])
+        Coordinator.initialize_actor_system(:coordinator, [num_of_nodes, topology, algorithm])
         #coordinator = spawn(Coordinator, :initialize_actor_system, [num_of_nodes, topology, algorithm])
         loop(args, n - 1)
     end
