@@ -39,14 +39,14 @@ defmodule App do
 
         IO.puts "starting coordinator from app..."
         #Coordinator.start_link
-        #Coordinator.initialize_actor_system(:coordinator, input)        
-        #loop(input, n - 1)
+        #Coordinator.initialize_actor_system(:coordinator, num_of_nodes, topology, algorithm)        
+        #loop(num_of_nodes, topology, algorithm, n - 1)
         num_of_nodes
     end
 
-    def loop(input, n) do
+    def loop(num_of_nodes, topology, algorithm, n) do
         :timer.sleep 1000
-        loop(input, n)
+        loop(num_of_nodes, topology, algorithm, n)
     end
     
     #def round_up(num) do
