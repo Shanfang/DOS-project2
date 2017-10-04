@@ -9,16 +9,16 @@ defmodule Actor do
     end
 
     def start_link(index) do
-        actor_name = Integer.to_string(index)
+        actor_name = index |> Integer.to_string |> String.to_atom
         GenServer.start_link(__MODULE__, index, [name: actor_name])
     end
 
-    def start_gossip(actor_name, [num_of_nodes, topology]) do
-       GenServer.call(actor_name, {:start_gossip, [num_of_nodes, topology]})     
+    def start_gossip(actor_name, [num_of_nodes: num_of_nodes, topology: topology]) do
+       GenServer.cast(actor_name, {:start_gossip, [num_of_nodes: num_of_nodes, topology: topology]})     
     end
 
-    def start_push_sum(actor_name, [num_of_nodes, topology, delta_s, delta_w]) do
-        GenServer.call(actor_name, {:start_push_sum, [num_of_nodes, topology, delta_s, delta_w]})             
+    def start_push_sum(actor_name, [num_of_nodes: num_of_nodes, topology: topology, delta_s: delta_s, delta_w: delta_w]) do
+        GenServer.cast(actor_name, {:start_push_sum, [num_of_nodes: num_of_nodes, topology: topology, delta_s: delta_s, delta_w: delta_w]})             
     end
     
     ######################### callbacks ####################
@@ -38,7 +38,8 @@ defmodule Actor do
 
     # send rumor to its neighbors, choose neighbor according to topology matching
     # def handle_call({:start_gossip, [num_of_nodes, topology, id]}, _from, [id: index, counter: 0, s_value: 0, w_value: 1, unchange_times: 0]) do        
-    def handle_call({:start_gossip, [num_of_nodes, topology]}, _from, state) do
+    def handle_cast({:start_gossip, [num_of_nodes: num_of_nodes, topology: topology]}, state) do
+        IO.puts "start gossip, counter increase by one"
         new_counter = state[:counter] + 1
         if new_counter == 10 do
             Coordinator.converged(:coordinator, :converged)
@@ -61,11 +62,11 @@ defmodule Actor do
             _ ->
                 IO.puts "Invalid topology, please try again!"
         end
-        {:ok, %{state | counter: new_counter}}
+        {:noreply, %{state | counter: new_counter}}
     end
 
     # when receiving push_sum msg
-    def handle_call({:start_push_sum, [num_of_nodes, topology, delta_s, delta_w]}, _from, state) do
+    def handle_cast({:start_push_sum, [num_of_nodes: num_of_nodes, topology: topology, delta_s: delta_s, delta_w: delta_w]}, state) do
         previous_ration = state[:s_value] / state[:w_value]
         new_s = state[:s_value] + delta_s
         new_w = state[:w_value] + delta_w
@@ -96,7 +97,7 @@ defmodule Actor do
         end
         s_value = new_s / 2
         w_value = new_w / 2
-        {:ok, %{state | counter: new_counter, s_value: s_value, w_value: w_value, unchange_times: unchange_times}}
+        {:noreply, %{state | counter: new_counter, s_value: s_value, w_value: w_value, unchange_times: unchange_times}}
     end
 
     ######################### helper functions ####################

@@ -10,8 +10,8 @@ defmodule Coordinator do
         GenServer.start_link(__MODULE__, [], [name: :coordinator])
     end
 
-    def initialize_actor_system(coordinator, [num_of_nodes, topology, algorithm]) do 
-        GenServer.call(coordinator, {:initialize_actor_system, [num_of_nodes, topology, algorithm]})
+    def initialize_actor_system(coordinator, [num_of_nodes: num_of_nodes, topology: topology, algorithm: algorithm]) do 
+        GenServer.call(coordinator, {:initialize_actor_system, [num_of_nodes: num_of_nodes, topology: topology, algorithm: algorithm]})
     end  
     def converged(coordinator, :converged) do
         GenServer.cast(coordinator, :converged)
@@ -27,9 +27,10 @@ defmodule Coordinator do
         {:ok, state}
     end
 
-    def handle_call({:initialize_actor_system, [num_of_nodes, topology, algorithm]}, _from, state) do
+    def handle_call({:initialize_actor_system, [num_of_nodes: num_of_nodes, topology: topology, algorithm: algorithm]}, _from, state) do
         total_nodes = num_of_nodes
-        start_time = init_actors(num_of_nodes, topology, algorithm)
+        start_time = init_actors([num_of_nodes: num_of_nodes, topology: topology, algorithm: algorithm])
+        IO.puts "actors have been initialized"
         {:ok, %{state | total_nodes: total_nodes, start_time: start_time}}
     end
 
@@ -48,7 +49,7 @@ defmodule Coordinator do
 
     ################## helper functions ####################
 
-    defp init_actors(num_of_nodes, topology, algorithm) do       
+    defp init_actors([num_of_nodes: num_of_nodes, topology: topology, algorithm: algorithm]) do       
         # building actors system
         list = []
         for index <- 0..num_of_nodes - 1 do
@@ -62,9 +63,9 @@ defmodule Coordinator do
         start_time = :os.system_time(:millisecond)
         case algorithm do
             "gossip" ->
-                Actor.start_gossip(initial_actor, [num_of_nodes, topology])                
+                Actor.start_gossip(initial_actor, [num_of_nodes: num_of_nodes, topology: topology])                
             "push_sum" ->
-                Actor.start_push_sum(Integer.to_string(initial_actor), [num_of_nodes, topology, initial_actor, 0, 0])                
+                Actor.start_push_sum(Integer.to_string(initial_actor), [num_of_nodes: num_of_nodes, topology: topology, delta_s: 0, delta_w: 0.5])                
             _ -> 
                 IO.puts "Invalid algorithm, please try again!"                   
         end
