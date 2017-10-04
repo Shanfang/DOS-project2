@@ -1,90 +1,134 @@
 defmodule Actor do
-    msg_received = 0
-    s_value = 0
-    w_value = 1
-    pre_ratio = 0
-    id = 0
-    neighbors = []
-    topology = ""
-    algorithm = ""
-    def initialize_actor(num_of_nodes, topo, ID) do
-        s_value = id
-        id = ID
-        topology = topo
+    import Topology
+
+    use GenServer
+
+    ######################### client API ####################
+    defmodule State do
+        defstruct id: 0, counter: 0, s_value: 0, w_value: 1, unchange_times: 0
     end
 
-    defp handle_msg do
-        receive do
-            # start of gossip protocol
-            {:start_gossip, actors} ->
-                algorithm = "gossip"
-                neighbors = actors
-                msg_received = msg_received + 1
-                send self, :tell_neighbor                   
-                
-                if msg_received == 1 do
-                    send coordinator, :gossip_converge
-                end
+    def start_link(index) do
+        actor_name = Integer.to_string(index)
+        GenServer.start_link(__MODULE__, index, [name: actor_name])
+    end
 
-                if msg_received == 10 do
-                    Process.exit(self, :kill)                    
-                end 
+    def start_gossip(actor_name, [num_of_nodes, topology]) do
+       GenServer.call(actor_name, {:start_gossip, [num_of_nodes, topology]})     
+    end
 
-            {:gossip_neighbor} ->
-                # propograte the rumor
-                case topology do
-                    "full" ->
-                        neighbor_id = neighbor_full(id, num_of_nodes)
-                        propgrate_gossip(neighbors, neighbor_id)
-                    "2D" ->
-                        neighbor_id = neighbor_2D(id, num_of_nodes)
-                        propgrate_gossip(neighbors, neighbor_id)                        
-                    "line" ->
-                        neighbor_id = neighbor_line(id, num_of_nodes)
-                        propgrate_gossip(neighbors, neighbor_id)                        
-                    "imp2D" ->
-                        neighbor_id = neighbor_imp2D(id, num_of_nodes)
-                        propgrate_gossip(neighbors, neighbor_id)                        
-                end
-            # end of gossip protocol
+    def start_push_sum(actor_name, [num_of_nodes, topology, delta_s, delta_w]) do
+        GenServer.call(actor_name, {:start_push_sum, [num_of_nodes, topology, delta_s, delta_w]})             
+    end
+    
+    ######################### callbacks ####################
 
-            # start of push sum protocol
-            {:start_push_sum, actors} ->
-                algorith = "push_sum"
-                neighbors = actors
-            {:push_sum_neighbor} ->
-                # propograte the rumor
-                case topology do
-                    "full" ->
-                        neighbor_id = neighbor_full(id, num_of_nodes)
-                        propgrate_push_sum(neighbors, neighbor_id)
-                    "2D" ->
-                        neighbor_id = neighbor_2D(id, num_of_nodes)
-                        propgrate_push_sum(neighbors, neighbor_id)                        
-                    "line" ->
-                        neighbor_id = neighbor_line(id, num_of_nodes)
-                        propgrate_push_sum(neighbors, neighbor_id)                        
-                    "imp2D" ->
-                        neighbor_id = neighbor_imp2D(id, num_of_nodes)
-                        propgrate_push_sum(neighbors, neighbor_id)                        
-                end
+    def init(index) do
+        id = index
+        counter = 0
+        s_value = 0 
+        w_value = 1
+        unchange_times = 0
+        init([], %State{id: id, counter: counter, s_value: s_value, w_value: w_value, unchange_times: unchange_times})
+      end
+    
+      def init([], state) do
+        {:ok, state}
+      end
 
+    # send rumor to its neighbors, choose neighbor according to topology matching
+    # def handle_call({:start_gossip, [num_of_nodes, topology, id]}, _from, [id: index, counter: 0, s_value: 0, w_value: 1, unchange_times: 0]) do        
+    def handle_call({:start_gossip, [num_of_nodes, topology]}, _from, state) do
+        new_counter = state[:counter] + 1
+        if new_counter == 10 do
+            Coordinator.converged(:coordinator, :converged)
+            Process.exit(self(), :kill)                    
+        end 
+
+        case topology do
+            "full" ->
+                neighbors = Topology.neighbor_full(state[:id], num_of_nodes)
+                propagate_gossip(neighbors, num_of_nodes, topology)
+            "2D" ->
+                neighbors = Topology.neighbor_2D(state[:id], num_of_nodes)
+                propagate_gossip(neighbors, num_of_nodes, topology)
+            "line" ->
+                neighbors = Topology.neighbor_line(state[:id], num_of_nodes)
+                propagate_gossip(neighbors, num_of_nodes, topology)
+            "imp2D" ->
+                neighbors = Topology.neighbor_imp2D(state[:id], num_of_nodes)
+                propagate_gossip(neighbors, num_of_nodes, topology)
+            _ ->
+                IO.puts "Invalid topology, please try again!"
         end
-        handle_msg
+        {:ok, %{state | counter: new_counter}}
     end
 
-    defp propgrate_gossip(neighbors, neighbor_id) do
-        # neighbor_pid = Enum.find_value(neighbors, fn ({id, pid}) when neighbor_id == id -> pid end)
-        neighbor_pid = List.keyfind(neighbors, neighbor_id, 0) |> elem(1)
-        if alive?(neighbor_pid) do
-            send neighbor_pid, :start_gossip
-        end    
+    # when receiving push_sum msg
+    def handle_call({:start_push_sum, [num_of_nodes, topology, delta_s, delta_w]}, _from, state) do
+        previous_ration = state[:s_value] / state[:w_value]
+        new_s = state[:s_value] + delta_s
+        new_w = state[:w_value] + delta_w
+        current_ration = new_s / new_w
+        new_counter = state[:counter] + 1
+        unchange_times = check_unchange(current_ration, previous_ration, :unchange_times)
+        if unchange_times == 3 do
+            Coordinator.converged(:coordinator, :converged)
+            Process.exit(self(), :kill)                    
+        end 
+  
+        case topology do
+            "full" ->
+                neighbors = Topology.neighbor_full(state[:id], num_of_nodes)
+                # propagate_push_sum(neighbors, state)
+                propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
+            "2D" ->
+                neighbors = Topology.neighbor_2D(state[:id], num_of_nodes)
+                propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
+            "line" ->
+                neighbors = Topology.neighbor_line(state[:id], num_of_nodes)
+                propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
+            "imp2D" ->
+                neighbors = Topology.neighbor_imp2D(state[:id], num_of_nodes)
+                propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
+            _ ->
+                IO.puts "Invalid topology, please try again!"
+        end
+        s_value = new_s / 2
+        w_value = new_w / 2
+        {:ok, %{state | counter: new_counter, s_value: s_value, w_value: w_value, unchange_times: unchange_times}}
     end
 
-    defp propgrate_push_sum(neighbors, neighbor_id) do
-        neighbor_pid = Enum.find_value(neighbors, fn ({id, pid}) when neighbor_id == id -> pid end)
-        if alive?(neighbor_pid) do
-            send neighbor_pid, :start_push_sum
-        end    
+    ######################### helper functions ####################
+
+
+    # propagate gossip by sending it to neighbors
+    defp propagate_gossip(neighbors, num_of_nodes, topology) do
+        Enum.each(neighbors, fn(neighbor) -> 
+            # Actor.gossip_rumor(Integer.to_string(neighbor))
+            Actor.start_gossip(Integer.to_string(neighbor), [num_of_nodes, topology])                            
+        end)        
+        #if alive?(neighbor_pid) do
+        #    Enum.each(neighbors, fn neighbor -> Actor.gossip_rumor(Integer.to_string(neighbor)) end)        
+        #end    
     end
+
+    defp propagate_push_sum(neighbors, num_of_nodes, topology, delta_s, delta_w) do
+        Enum.each(neighbors, fn(neighbor) -> 
+            # Actor.gossip_rumor(Integer.to_string(neighbor), [s_value / 2, w_value / 2])
+            Actor.start_push_sum(Integer.to_string(neighbor), [num_of_nodes, topology, delta_s, delta_w])                            
+        end)                
+    end
+
+    defp check_unchange(current_ration, previous_ration, unchange_times) do
+        unchange = 
+            case abs(current_ration - previous_ration) < :math.pow(10, -10) do
+                true ->
+                    unchange = unchange_times + 1
+                _ ->
+                    unchange = 0
+            end
+        unchange
+    end
+
 end

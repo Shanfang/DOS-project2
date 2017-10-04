@@ -1,7 +1,7 @@
 defmodule BootTest do
-    use ExUnit.Case
+  use ExUnit.Case
   
-    test "round up to perfect square shold work" do
+  test "initialization of coordinator" do
       assert App.hello() == :world
-    end
   end
+end

@@ -1,83 +1,73 @@
 defmodule Coordinator do
+    use GenServer
 
-    def initialize_actor_system(num_of_nodes, topology, algorithm) do
-        
-        # count the number of actors 
-        # (i) who has received the rumor at least once (in the scenario of gossip algorithm)
-        # (ii) whose s/w ration has converged
+    ######################### client API ####################
+    defmodule State do
+        defstruct conv_count: 0, total_nodes: 0, start_time: 0, end_time: 0
+    end
+
+    def start_link do
+        GenServer.start_link(__MODULE__, [], [name: :coordinator])
+    end
+
+    def initialize_actor_system(coordinator, [num_of_nodes, topology, algorithm]) do 
+        GenServer.call(coordinator, {:initialize_actor_system, [num_of_nodes, topology, algorithm]})
+    end  
+    def converged(coordinator, :converged) do
+        GenServer.cast(coordinator, :converged)
+    end
+
+    ######################### callbacks ####################
+    def init([]) do
         conv_count = 0
-
-        ##############!!!!!!!!!!!!!!! neighbors should be like [one: "first", two: "second"]
-        #### then, need to find how to add a key-value pair to the list###########
-
-
-
-
-        
-        neighbors = [{}]
-        # is_alive = []
+        total_nodes = 0
         start_time = 0
+        end_time = 0
+        state =  %State{conv_count: conv_count, total_nodes: total_nodes, start_time: start_time, end_time: end_time}
+        {:ok, state}
+    end
 
-        # build topology
-        for id <- 1..num_of_nodes do
-            actor_pid = spawn(Actor, :initialize_actor, [num_of_nodes, topology, i])
-            actor_tuple = {Integer.to_string : actor_pid}
-            neighbors = [actor_tuple | neighbors]
-            #is_alive = [true | is_alive]    
+    def handle_call({:initialize_actor_system, [num_of_nodes, topology, algorithm]}, _from, state) do
+        total_nodes = num_of_nodes
+        start_time = init_actors(num_of_nodes, topology, algorithm)
+        {:ok, %{state | total_nodes: total_nodes, start_time: start_time}}
+    end
+
+    def handle_cast(:converged, state) do
+        conv_count = state[:conv_count] + 1
+        total_num = state[:total_nodes]
+        if conv_count == total_num do
+            end_time = :os.system_time(:millisecond)
+            conv_time = end_time - state[:start_time]
+            IO.puts "Converged, time taken is: " <> Integer.to_string(conv_time) <> "millseconds"  
+        else
+            end_time = 0
+        end
+        {:noreply, %{state |conv_count: conv_count, end_time: end_time}}
+    end 
+
+    ################## helper functions ####################
+
+    defp init_actors(num_of_nodes, topology, algorithm) do       
+        # building actors system
+        list = []
+        for index <- 0..num_of_nodes - 1 do
+            Actor.start_link(index)            
+            list = [index | list]
         end 
-        
-        # randomly choose an actor as the starting node 
-        initial_actor = Enum.random(neighbors)
 
+        initial_actor = Enum.random(list)
+
+        # start timing when initialization is complete
+        start_time = :os.system_time(:millisecond)
         case algorithm do
             "gossip" ->
-                # start gossip algorithm
-                gossip_algorithm(initial_actor, topology)
+                Actor.start_gossip(initial_actor, [num_of_nodes, topology])                
             "push_sum" ->
-                # start the push algorithm
-                push_sum_algorithm(initial_actor, topology)
-            _ ->
-                IO.puts "Invalid algorithm, please try again!"
+                Actor.start_push_sum(Integer.to_string(initial_actor), [num_of_nodes, topology, initial_actor, 0, 0])                
+            _ -> 
+                IO.puts "Invalid algorithm, please try again!"                   
         end
-    end
-
-    defp gossip_algorithm(initial_actor, topology, start_time) do
-        # start the gossip protocol
-        # start_time = :os.system_time(:millisecond)
-        send initial_actor, {:start_gossip, neighbors}
-        IO.puts "starting gossip"
-        start_time = :os.system_time(:millisecond)        
-    end
-
-    defp push_sum_algorithm(initial_actor, topology, start_time) do
-        # start the push_sum protocol
-        # start_time = :os.system_time(:millisecond)
-        send initial_actor, {:start_push_sum, neighbors}
-        IO.puts "starting push_sum"
-        start_time = :os.system_time(:millisecond)        
-    end
-
-    # handle message sent from actors
-    def handle_msg do
-        receive do
-            {:gossip_converge} -> 
-                conv_count = conv_count + 1
-                if conv_count == num_of_nodes do
-                    end_time = :os.system_time(:millisecond)
-                    conv_time = end_time - start_time
-                    IO.puts "gossip converged: " <> Integer.to_string(conv_time)                    
-                end
-            {:push_sum_converge, sw_ration} ->
-                conv_count = conv_count + 1
-                if conv_count == 1 do
-                    end_time = :os.system_time(:millisecond)
-                    conv_time = end_time - start_time
-                    conv_time = end_time - start_time                    
-                    IO.puts "push_sum converged: " <> Integer.to_string(conv_time)    
-                end
-            _ ->
-                IO.puts "invalid message from the actor!"
-        end
-        handle_msg
+        start_time
     end
 end
