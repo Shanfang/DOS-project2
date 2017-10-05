@@ -1,10 +1,10 @@
 defmodule App do
     def main(args) do
-        #num_of_nodes = Enum.at(args, 0) |> String.to_integer
         num_of_nodes = Enum.at(args, 0)
         num_of_nodes = String.to_integer(num_of_nodes)   
         topology = Enum.at(args, 1)
-        algorithm = Enum.at(args, 2)       
+        algorithm = Enum.at(args, 2)  
+        failure_num = Enum.at(args, 3) 
         loop(num_of_nodes, topology, algorithm, 1)
     end
 
@@ -15,9 +15,9 @@ defmodule App do
             num_of_nodes = :math.sqrt(num_of_nodes) |> Float.ceil |> :math.pow(2) |>trunc
         end
 
-        IO.puts "starting coordinator..."
         Coordinator.start_link
-        Coordinator.initialize_actor_system(:coordinator, num_of_nodes, topology, algorithm)        
+        IO.puts "Coordinator is started..."        
+        Coordinator.initialize_actor_system(:coordinator, num_of_nodes, topology, algorithm) 
         loop(num_of_nodes, topology, algorithm, n - 1)
     end
 

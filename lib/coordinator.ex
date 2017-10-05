@@ -10,6 +10,7 @@ defmodule Coordinator do
     def initialize_actor_system(coordinator, num_of_nodes, topology, algorithm) do 
         GenServer.cast(coordinator, {:initialize_actor_system, num_of_nodes, topology, algorithm})
     end  
+
     def converged(coordinator, {:converged, actor_id}) do
         GenServer.cast(coordinator, {:converged, actor_id})
     end
@@ -36,7 +37,7 @@ defmodule Coordinator do
         if conv_count == total_num do
             end_time = :os.system_time(:millisecond)
             conv_time = end_time - state[:start_time]
-            converge_info = "Converged, time taken is: " <> Integer.to_string(conv_time) <> " millseconds"  
+            converge_info = "Converged, time taken: " <> Integer.to_string(conv_time) <> " millseconds"  
             IO.puts converge_info
         else
             end_time = 0
@@ -44,13 +45,14 @@ defmodule Coordinator do
         new_state = %{state |conv_count: conv_count, end_time: end_time}
         {:noreply, new_state}
     end 
-
+    
     ################## helper functions ####################
 
     defp init_actors(num_of_nodes, topology, algorithm) do       
         # building actors system
         for index <- 0..num_of_nodes - 1 do
-            Actor.start_link(index)            
+            Actor.start_link(index) 
+            Actor.setup_neighbors(index |> Integer.to_string |> String.to_atom, num_of_nodes, topology)          
         end 
          
         initial_actor = :rand.uniform(num_of_nodes - 1) |> Integer.to_string |> String.to_atom
@@ -59,9 +61,9 @@ defmodule Coordinator do
         start_time = :os.system_time(:millisecond)
         case algorithm do
             "gossip" ->
-                Actor.start_gossip(initial_actor, num_of_nodes, topology)                
+                Actor.start_gossip(initial_actor)                
             "push_sum" ->
-                Actor.start_push_sum(initial_actor, num_of_nodes, topology, 0, 0.5)                
+                Actor.start_push_sum(initial_actor, 0, 0.5)                
             _ -> 
                 IO.puts "Invalid algorithm, please try again!"                   
         end
