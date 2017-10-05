@@ -23,24 +23,26 @@ defmodule Coordinator do
     #def handle_call({:initialize_actor_system, [num_of_nodes: num_of_nodes, topology: topology, algorithm: algorithm]}, _from, state) do        
     def handle_cast({:initialize_actor_system, num_of_nodes, topology, algorithm}, state) do
         start_time = init_actors(num_of_nodes, topology, algorithm)
-        IO.puts "actors have been initialized"
-        {:noreply, %{state | total_nodes: num_of_nodes, start_time: start_time}}
+        IO.puts "Actors have been initialized"
+        new_state = %{state | total_nodes: num_of_nodes, start_time: start_time}
+        {:noreply, new_state}
     end
 
     def handle_cast({:converged, actor_id}, state) do
-        msg_info =  "one converge msg received from: " <> Integer.to_string(actor_id)
+        msg_info =  "One converge msg from actor indexed: " <> Integer.to_string(actor_id)
         IO.puts msg_info
         conv_count = state[:conv_count] + 1
         total_num = state[:total_nodes]
         if conv_count == total_num do
             end_time = :os.system_time(:millisecond)
             conv_time = end_time - state[:start_time]
-            converge_info = "Converged, time taken is: " <> Integer.to_string(conv_time) <> "millseconds"  
+            converge_info = "Converged, time taken is: " <> Integer.to_string(conv_time) <> " millseconds"  
             IO.puts converge_info
         else
             end_time = 0
         end
-        {:noreply, %{state |conv_count: conv_count, end_time: end_time}}
+        new_state = %{state |conv_count: conv_count, end_time: end_time}
+        {:noreply, new_state}
     end 
 
     ################## helper functions ####################

@@ -22,10 +22,9 @@ defmodule Actor do
 
     def init(index) do 
         state = %{id: 0, alive: true, counter: 0, s_value: 0, w_value: 1, unchange_times: 0}
-        %{state | id: index}
-        #Map.update!(state, :id, fn _ -> index end)
-        IO.puts state[:id]
-        {:ok, state}
+        new_state = %{state | id: index}
+        #IO.puts new_state[:id]
+        {:ok, new_state}
     end
 
     # send rumor to its neighbors, choose neighbor according to topology matching
@@ -36,7 +35,7 @@ defmodule Actor do
                 if new_counter == 10 do
                     Coordinator.converged(:coordinator, {:converged, state[:id]})
                     #Process.exit(self(), :kill)
-                    %{state | alive: false}
+                    new_state = %{state | alive: false}
                 end 
 
                 case topology do
@@ -60,7 +59,8 @@ defmodule Actor do
                 # resend rumor to it neighbors after 1 second
                 gossip_resend(num_of_nodes, topology)
         end 
-        {:noreply, %{state | counter: new_counter}}
+        new_state = %{state | counter: new_counter}
+        {:noreply, new_state}
     end
 
     # when receiving push_sum msg
@@ -76,7 +76,7 @@ defmodule Actor do
                 if unchange_times == 3 do
                     Coordinator.converged(:coordinator, {:converged, state[:id]})                    
                     #Process.exit(self(), :kill)
-                    %{state | alive: false}                    
+                    new_state = %{state | alive: false}                    
                 end 
         
                 case topology do
@@ -98,7 +98,8 @@ defmodule Actor do
                 s_value = new_s / 2
                 w_value = new_w / 2
         end
-        {:noreply, %{state | counter: new_counter, s_value: s_value, w_value: w_value, unchange_times: unchange_times}}
+        new_state = %{state | counter: new_counter, s_value: s_value, w_value: w_value, unchange_times: unchange_times}
+        {:noreply, new_state}
     end
 
     def handle_info({:gossip_resend, num_of_nodes, topology}, state) do
@@ -108,7 +109,8 @@ defmodule Actor do
 
     def handle_info({:push_sum_resend, num_of_nodes, topology}, state) do
         Actor.start_push_sum(self(), num_of_nodes, topology, state[:s_value] / 2, state[:w_value] / 2)
-        {:noreply, %{state | s_value: state[:s_value] / 2, w_value: state[:w_value] / 2}}
+        new_state = %{state | s_value: state[:s_value] / 2, w_value: state[:w_value] / 2} 
+        {:noreply, new_state}
     end
     ######################### helper functions ####################
 
