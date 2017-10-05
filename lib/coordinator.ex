@@ -10,13 +10,10 @@ defmodule Coordinator do
     def initialize_actor_system(coordinator, num_of_nodes, topology, algorithm) do 
         GenServer.cast(coordinator, {:initialize_actor_system, num_of_nodes, topology, algorithm})
     end  
-    def converged(coordinator, :converged) do
-        GenServer.cast(coordinator, :converged)
+    def converged(coordinator, {:converged, actor_id}) do
+        GenServer.cast(coordinator, {:converged, actor_id})
     end
 
-    def say_hello(coordinator, :hello) do
-        GenServer.cast(coordinator, :hello)
-    end
     ######################### callbacks ####################
     def init(%{}) do
         state = %{conv_count: 0, total_nodes: 0, start_time: 0, end_time: 0}
@@ -30,17 +27,16 @@ defmodule Coordinator do
         {:noreply, %{state | total_nodes: num_of_nodes, start_time: start_time}}
     end
 
-    def handle_info(:hello, state) do
-        IO.put "hello Shanfang"
-        {:noreply, state}
-    end
-    def handle_cast(:converged, state) do
+    def handle_cast({:converged, actor_id}, state) do
+        msg_info =  "one converge msg received from: " <> Integer.to_string(actor_id)
+        IO.puts msg_info
         conv_count = state[:conv_count] + 1
         total_num = state[:total_nodes]
         if conv_count == total_num do
             end_time = :os.system_time(:millisecond)
             conv_time = end_time - state[:start_time]
-            IO.puts "Converged, time taken is: " <> Integer.to_string(conv_time) <> "millseconds"  
+            converge_info = "Converged, time taken is: " <> Integer.to_string(conv_time) <> "millseconds"  
+            IO.puts converge_info
         else
             end_time = 0
         end
@@ -51,8 +47,6 @@ defmodule Coordinator do
 
     defp init_actors(num_of_nodes, topology, algorithm) do       
         # building actors system
-
-        # num_of_nodes = String.to_integer(num_of_nodes)
         for index <- 0..num_of_nodes - 1 do
             Actor.start_link(index)            
         end 

@@ -20,74 +20,84 @@ defmodule Actor do
     
     ######################### callbacks ####################
 
-    def init(index) do        
-        state = %{id: 0, counter: 0, s_value: 0, w_value: 1, unchange_times: 0}
-        %{state| id: index}
+    def init(index) do 
+        state = %{id: 0, alive: true, counter: 0, s_value: 0, w_value: 1, unchange_times: 0}
+        %{state | id: index}
+        #Map.update!(state, :id, fn _ -> index end)
+        IO.puts state[:id]
         {:ok, state}
     end
 
     # send rumor to its neighbors, choose neighbor according to topology matching
     def handle_cast({:start_gossip, num_of_nodes, topology}, state) do
-        IO.puts "start gossip, counter increase by one"
-        new_counter = state[:counter] + 1
-        if new_counter == 10 do
-            Coordinator.converged(:coordinator, :converged)
-            Process.exit(self(), :kill)                    
+        case state[:alive] do
+            true ->
+                new_counter = state[:counter] + 1
+                if new_counter == 10 do
+                    Coordinator.converged(:coordinator, {:converged, state[:id]})
+                    #Process.exit(self(), :kill)
+                    %{state | alive: false}
+                end 
+
+                case topology do
+                    "full" ->
+                        neighbors = Topology.neighbor_full(state[:id], num_of_nodes)
+                        propagate_gossip(neighbors, num_of_nodes, topology)
+                    "2D" ->
+                        neighbors = Topology.neighbor_2D(state[:id], num_of_nodes)
+                        propagate_gossip(neighbors, num_of_nodes, topology)
+                    "line" ->
+                        neighbors = Topology.neighbor_line(state[:id], num_of_nodes)
+                        propagate_gossip(neighbors, num_of_nodes, topology)
+                    "imp2D" ->
+                        neighbors = Topology.neighbor_imp2D(state[:id], num_of_nodes)
+                        propagate_gossip(neighbors, num_of_nodes, topology)
+                    _ ->
+                        IO.puts "Invalid topology, please try again!"
+                        Process.exit(self(), :kill) 
+                end
+
+                # resend rumor to it neighbors after 1 second
+                gossip_resend(num_of_nodes, topology)
         end 
-
-        case topology do
-            "full" ->
-                neighbors = Topology.neighbor_full(state[:id], num_of_nodes)
-                propagate_gossip(neighbors, num_of_nodes, topology)
-            "2D" ->
-                neighbors = Topology.neighbor_2D(state[:id], num_of_nodes)
-                propagate_gossip(neighbors, num_of_nodes, topology)
-            "line" ->
-                neighbors = Topology.neighbor_line(state[:id], num_of_nodes)
-                propagate_gossip(neighbors, num_of_nodes, topology)
-            "imp2D" ->
-                neighbors = Topology.neighbor_imp2D(state[:id], num_of_nodes)
-                propagate_gossip(neighbors, num_of_nodes, topology)
-            _ ->
-                IO.puts "Invalid topology, please try again!"
-        end
-
-        # resend rumor to it neighbors after 1 second
-        gossip_resend(num_of_nodes, topology)
         {:noreply, %{state | counter: new_counter}}
     end
 
     # when receiving push_sum msg
     def handle_cast({:start_push_sum, num_of_nodes, topology, delta_s, delta_w}, state) do
-        previous_ration = state[:s_value] / state[:w_value]
-        new_s = state[:s_value] + delta_s
-        new_w = state[:w_value] + delta_w
-        current_ration = new_s / new_w
-        new_counter = state[:counter] + 1
-        unchange_times = check_unchange(current_ration, previous_ration, state[:unchange_times])
-        if unchange_times == 3 do
-            Coordinator.converged(:coordinator, :converged)
-            Process.exit(self(), :kill)                    
-        end 
-  
-        case topology do
-            "full" ->
-                neighbors = Topology.neighbor_full(state[:id], num_of_nodes)
-                propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
-            "2D" ->
-                neighbors = Topology.neighbor_2D(state[:id], num_of_nodes)
-                propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
-            "line" ->
-                neighbors = Topology.neighbor_line(state[:id], num_of_nodes)
-                propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
-            "imp2D" ->
-                neighbors = Topology.neighbor_imp2D(state[:id], num_of_nodes)
-                propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
-            _ ->
-                IO.puts "Invalid topology, please try again!"
+        case state[:alive] do 
+            true ->
+                previous_ration = state[:s_value] / state[:w_value]
+                new_s = state[:s_value] + delta_s
+                new_w = state[:w_value] + delta_w
+                current_ration = new_s / new_w
+                new_counter = state[:counter] + 1
+                unchange_times = check_unchange(current_ration, previous_ration, state[:unchange_times])
+                if unchange_times == 3 do
+                    Coordinator.converged(:coordinator, {:converged, state[:id]})                    
+                    #Process.exit(self(), :kill)
+                    %{state | alive: false}                    
+                end 
+        
+                case topology do
+                    "full" ->
+                        neighbors = Topology.neighbor_full(state[:id], num_of_nodes)
+                        propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
+                    "2D" ->
+                        neighbors = Topology.neighbor_2D(state[:id], num_of_nodes)
+                        propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
+                    "line" ->
+                        neighbors = Topology.neighbor_line(state[:id], num_of_nodes)
+                        propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
+                    "imp2D" ->
+                        neighbors = Topology.neighbor_imp2D(state[:id], num_of_nodes)
+                        propagate_push_sum(neighbors, num_of_nodes, topology, new_s / 2, new_w / 2)
+                    _ ->
+                        IO.puts "Invalid topology, please try again!"
+                end
+                s_value = new_s / 2
+                w_value = new_w / 2
         end
-        s_value = new_s / 2
-        w_value = new_w / 2
         {:noreply, %{state | counter: new_counter, s_value: s_value, w_value: w_value, unchange_times: unchange_times}}
     end
 
