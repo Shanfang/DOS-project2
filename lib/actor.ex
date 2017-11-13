@@ -7,7 +7,9 @@ defmodule Actor do
 
     def start_link(index) do
         actor_name = index |> Integer.to_string |> String.to_atom
-        GenServer.start_link(__MODULE__, index, [name: actor_name])
+        GenServer.start_link(__MODULE__, index, [name: actor_name]) 
+       # start_link method's 3rd parameter opt is a keyword list[]
+       # so its key msut be atom, so [name: actor_name] is esentially [{:name, actor_name}]
     end
 
     def setup_neighbors(actor_name, num_of_nodes, topology) do
@@ -26,6 +28,13 @@ defmodule Actor do
 
     def init(index) do 
         state = %{id: 0, neighbors: [], alive: true, counter: 0, s_value: 0, w_value: 1, unchange_times: 0}
+        # it is more reasonable to use a State struct instead of a Map
+        # because we know what kind of properties the state is expecting.
+        # Besides, using state[:age] syntax(another syntax is dot access) to access neighbors might return nil if age does not exist
+        # But for struct, state.age (struct only allow dot access)will return an error, this will help
+        # catch error early instead of passing over an silent error.
+        # http://culttt.com/2016/06/20/what-are-elixir-structs/ this post has a nice explanation
+        
         new_state = %{state | id: index}
         {:ok, new_state}
     end

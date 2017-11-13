@@ -20,7 +20,7 @@ defmodule Project2.Mixfile do
   def application do
     [ applications: [],
       mod: { Project2, [] },
-      extra_applications: [:logger]
+      extra_applications: [:crypto, :logger]
     ]
   end
 
